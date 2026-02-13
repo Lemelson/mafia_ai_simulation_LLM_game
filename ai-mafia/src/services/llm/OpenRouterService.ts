@@ -10,7 +10,12 @@ export class OpenRouterService implements LLMService {
   }
 
   setApiKey(key: string) {
-    this.apiKey = key;
+    this.apiKey = (key ?? '').trim();
+  }
+
+  setBaseUrl(url: string) {
+    const trimmed = (url ?? '').trim();
+    if (trimmed.length > 0) this.baseUrl = trimmed;
   }
 
   isAvailable(): boolean {
@@ -72,8 +77,10 @@ let instance: OpenRouterService | null = null;
 export function getOpenRouterService(): OpenRouterService {
   if (!instance) {
     const stored = localStorage.getItem('mafia-settings');
-    const key = stored ? JSON.parse(stored)?.state?.openRouterApiKey || '' : '';
-    instance = new OpenRouterService(key);
+    const parsed = stored ? JSON.parse(stored) : null;
+    const key = parsed?.state?.openRouterApiKey || '';
+    const baseUrl = parsed?.state?.openRouterBaseUrl || undefined;
+    instance = new OpenRouterService(key, baseUrl);
   }
   return instance;
 }

@@ -23,6 +23,9 @@ export function PlayerAvatar({
   role, showRole = false, roleBadge, modelLabel,
 }: PlayerAvatarProps) {
   const { colors, isNight } = useTheme();
+  const showRoleBadge = showRole && !!roleBadge;
+  const roleBadgeSize = Math.min(52, Math.max(24, Math.round(size * 0.65)));
+  const roleBadgeFontSize = Math.round(roleBadgeSize * 0.55);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
@@ -63,21 +66,21 @@ export function PlayerAvatar({
         {avatar}
 
         {/* Role badge for observers */}
-        {!!roleBadge && (
+        {showRoleBadge && (
           <div
             style={{
               position: 'absolute',
-              top: -6,
-              left: -6,
-              width: 20,
-              height: 20,
+              top: -Math.round(roleBadgeSize * 0.25),
+              left: -Math.round(roleBadgeSize * 0.25),
+              width: roleBadgeSize,
+              height: roleBadgeSize,
               borderRadius: 999,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 12,
+              fontSize: roleBadgeFontSize,
               background: colors.bgPrimary,
-              border: `1px solid ${colors.border}`,
+              border: `2px solid ${colors.border}`,
               boxShadow: colors.shadow,
               opacity: isAlive ? 1 : 0.6,
             }}

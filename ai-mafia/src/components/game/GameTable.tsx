@@ -12,6 +12,7 @@ export function GameTable() {
   const { colors, isNight } = useTheme();
   const players = useGameStore(s => s.players);
   const phase = useGameStore(s => s.phase);
+  const revealRoles = useGameStore(s => s.revealRoles);
   const speakingOrder = useGameStore(s => s.speakingOrder);
   const currentSpeakerIndex = useGameStore(s => s.currentSpeakerIndex);
   const votingState = useGameStore(s => s.votingState);
@@ -130,15 +131,19 @@ export function GameTable() {
               <PlayerAvatar
                 name={player.name}
                 avatar={player.avatar}
-                color={player.color}
+                color={revealRoles ? player.color : player.publicColor}
                 isAlive={player.isAlive}
                 isSpeaking={player.playerId === currentSpeakerId && status === 'playing'}
                 size={60}
                 showName={true}
-                role={ROLE_NAMES[player.role]}
-                roleBadge={ROLE_EMOJI[player.role]}
-                showRole={phase === 'game_over' || phase === 'role_assignment'}
-                modelLabel={DEFAULT_MODELS.find(m => m.id === player.modelId)?.name || player.modelId}
+                role={revealRoles ? ROLE_NAMES[player.role] : undefined}
+                roleBadge={revealRoles ? ROLE_EMOJI[player.role] : undefined}
+                showRole={revealRoles}
+                modelLabel={
+                  revealRoles
+                    ? (DEFAULT_MODELS.find(m => m.id === player.modelId)?.name || player.modelId)
+                    : undefined
+                }
               />
             </motion.div>
           ))}

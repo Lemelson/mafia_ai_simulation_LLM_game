@@ -7,6 +7,8 @@ import { Button } from '../components/ui/Button';
 import { THEMES } from '../components/themes/themes';
 import { DEFAULT_MODELS } from '../types/player';
 import { resetOpenRouterService } from '../services/llm/OpenRouterService';
+import { OpenRouterService } from '../services/llm/OpenRouterService';
+import { filterFreeModels, parseOpenRouterModelIdsFromText } from '../utils/modelList';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -19,6 +21,92 @@ export function Settings() {
   const deleteName = useNamePoolStore(s => s.deleteName);
   const resetNames = useNamePoolStore(s => s.resetDefaults);
   const [newName, setNewName] = React.useState('');
+  const [llmTestStatus, setLlmTestStatus] = React.useState<{ kind: 'idle' | 'loading' | 'ok' | 'error'; text?: string }>({ kind: 'idle' });
+  const [freeModelsText, setFreeModelsText] = React.useState('');
+  const freeModelIds = useSettingsStore(s => s.freeModelIds);
+  const setFreeModelIds = useSettingsStore(s => s.setFreeModelIds);
+  const [modelTestResults, setModelTestResults] = React.useState<Record<string, { status: 'pending' | 'ok' | 'error'; ms?: number; text?: string }>>({});
+  const [isBatchTesting, setIsBatchTesting] = React.useState(false);
+  const batchCancelRef = React.useRef({ cancelled: false });
+
+  const curatedFreeModels = React.useMemo(() => ([
+    'arcee-ai/trinity-large-preview:free',
+    'openai/gpt-oss-120b:free',
+    'stepfun/step-3.5-flash:free',
+    'tngtech/deepseek-r1t2-chimera:free',
+    'z-ai/glm-4.5-air:free',
+    'deepseek/deepseek-r1-0528:free',
+    'tngtech/deepseek-r1t-chimera:free',
+    'nvidia/nemotron-3-nano-30b-a3b:free',
+    'tngtech/tng-r1t-chimera:free',
+  ]), []);
+
+  const runBatchModelTest = React.useCallback(async (models: string[]) => {
+    const key = (settings.openRouterApiKey ?? '').trim();
+    if (!key) {
+      setModelTestResults({ '(setup)': { status: 'error', text: 'API ключ пустой (введите OpenRouter ключ выше).' } });
+      return;
+    }
+
+    batchCancelRef.current.cancelled = false;
+    setIsBatchTesting(true);
+
+    const svc = new OpenRouterService(key, settings.openRouterBaseUrl);
+    const uniqueModels = Array.from(new Set(models.map(m => (m ?? '').trim()).filter(Boolean)));
+    const maxModels = 25;
+    const toTest = uniqueModels.length > maxModels ? uniqueModels.slice(0, maxModels) : uniqueModels;
+
+    const initial: Record<string, { status: 'pending' | 'ok' | 'error'; ms?: number; text?: string }> = {};
+    if (uniqueModels.length > maxModels) {
+      initial['(setup)'] = {
+        status: 'error',
+        text: `Список слишком большой: ${uniqueModels.length}. Для защиты от лимитов тестирую первые ${maxModels}.`,
+      };
+    }
+    for (const id of toTest) initial[id] = { status: 'pending' };
+    setModelTestResults(initial);
+
+    for (const modelId of toTest) {
+      if (batchCancelRef.current.cancelled) break;
+      const t0 = performance.now();
+      try {
+        const reply = await svc.generateReply({
+          systemPrompt: 'Reply with exactly: OK',
+          messages: [{ role: 'user', content: 'Привет! Ответь одним словом: OK' }],
+          modelId,
+          maxTokens: 16,
+          temperature: 0,
+          responseFormat: 'text',
+        });
+        const ms = Math.round(performance.now() - t0);
+        setModelTestResults(prev => ({
+          ...prev,
+          [modelId]: { status: 'ok', ms, text: reply.trim().slice(0, 80) },
+        }));
+      } catch (err) {
+        const ms = Math.round(performance.now() - t0);
+        const msg = err instanceof Error ? err.message : String(err);
+        setModelTestResults(prev => ({
+          ...prev,
+          [modelId]: { status: 'error', ms, text: msg.slice(0, 180) },
+        }));
+      }
+
+      // Gentle pacing to reduce 429s.
+      await new Promise(r => setTimeout(r, 250));
+    }
+
+    setIsBatchTesting(false);
+  }, [settings.openRouterApiKey, settings.openRouterBaseUrl]);
+
+  const allFreeModelsInApp = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of DEFAULT_MODELS) {
+      if (m.free) ids.add(m.id);
+    }
+    for (const id of freeModelIds) ids.add(id);
+    return Array.from(ids);
+  }, [freeModelIds]);
 
   React.useEffect(() => {
     initNamePool();
@@ -90,6 +178,54 @@ export function Settings() {
           </p>
         </div>
 
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={llmTestStatus.kind === 'loading'}
+            onClick={async () => {
+              const key = (settings.openRouterApiKey ?? '').trim();
+              if (!key) {
+                setLlmTestStatus({ kind: 'error', text: 'Ключ пустой (проверьте поле API ключа).' });
+                return;
+              }
+              setLlmTestStatus({ kind: 'loading', text: 'Проверяю OpenRouter...' });
+              try {
+                const svc = new OpenRouterService(key, settings.openRouterBaseUrl);
+                const reply = await svc.generateReply({
+                  systemPrompt: 'You are a health check. Reply with exactly: OK',
+                  messages: [{ role: 'user', content: 'Reply with OK.' }],
+                  modelId: settings.defaultModel,
+                  maxTokens: 10,
+                  temperature: 0,
+                  responseFormat: 'text',
+                });
+                setLlmTestStatus({ kind: 'ok', text: `OK (ответ: ${reply.slice(0, 80)})` });
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                setLlmTestStatus({ kind: 'error', text: msg.slice(0, 240) });
+              }
+            }}
+          >
+            🧪 Проверить OpenRouter
+          </Button>
+
+          {llmTestStatus.kind !== 'idle' && (
+            <span style={{
+              fontSize: '12px',
+              color: llmTestStatus.kind === 'ok' ? colors.success : llmTestStatus.kind === 'error' ? colors.danger : colors.textMuted,
+              maxWidth: '520px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+              title={llmTestStatus.text}
+            >
+              {llmTestStatus.kind === 'loading' ? '...' : llmTestStatus.text}
+            </span>
+          )}
+        </div>
+
         <div style={{ marginBottom: '12px' }}>
           <label style={labelStyle}>Модель по умолчанию</label>
           <select
@@ -102,7 +238,116 @@ export function Settings() {
                 {m.name} ({m.provider}) {m.free ? '🆓' : '💰'}
               </option>
             ))}
+            {freeModelIds.length > 0 && (
+              <optgroup label="Imported free models">
+                {freeModelIds.map(id => (
+                  <option key={id} value={id}>
+                    {id}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
+        </div>
+
+        <div style={{ marginBottom: '12px' }}>
+          <label style={labelStyle}>
+            Импорт списка моделей (вставь строки вида `openrouter:...` и нажми “Импортировать free”)
+          </label>
+          <textarea
+            value={freeModelsText}
+            onChange={e => setFreeModelsText(e.target.value)}
+            rows={6}
+            placeholder={`openrouter:arcee-ai/trinity-large-preview:free\nopenrouter:deepseek/deepseek-r1-0528:free\n...`}
+            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px', flexWrap: 'wrap' }}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                const ids = parseOpenRouterModelIdsFromText(freeModelsText);
+                const free = filterFreeModels(ids);
+                setFreeModelIds(free);
+              }}
+            >
+              📥 Импортировать free
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setFreeModelIds(curatedFreeModels);
+                setFreeModelsText(curatedFreeModels.map(id => `openrouter:${id}`).join('\n'));
+              }}
+              title="Заменяет импортированный список на проверенные ID из твоего сообщения"
+            >
+              ⭐ Загрузить 8 моделей
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={isBatchTesting}
+              onClick={() => {
+                const models = (freeModelIds.length > 0 ? freeModelIds : curatedFreeModels).slice(0, 30);
+                void runBatchModelTest(models);
+              }}
+              title="Проверяет, что модели реально отвечают на минимальный healthcheck-запрос"
+            >
+              ▶︎ Тест моделей (до 30)
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={isBatchTesting}
+              onClick={() => { void runBatchModelTest(allFreeModelsInApp); }}
+              title="Проверяет все free-модели, которые сейчас есть в списке приложения (плюс импортированные)"
+            >
+              ▶︎ Тест free (все из списка)
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!isBatchTesting}
+              onClick={() => { batchCancelRef.current.cancelled = true; setIsBatchTesting(false); }}
+            >
+              Стоп
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setFreeModelIds([])}
+              disabled={freeModelIds.length === 0}
+            >
+              Очистить
+            </Button>
+            <span style={{ fontSize: '12px', color: colors.textMuted }}>
+              Free моделей в списке: {freeModelIds.length}
+            </span>
+          </div>
+
+          {Object.keys(modelTestResults).length > 0 && (
+            <div style={{
+              marginTop: '10px',
+              padding: '10px 12px',
+              borderRadius: theme.borderRadius,
+              border: `1px solid ${colors.border}`,
+              background: colors.bgSecondary,
+              maxHeight: '180px',
+              overflow: 'auto',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+              fontSize: '12px',
+              whiteSpace: 'pre',
+              color: colors.textPrimary,
+            }}>
+              {Object.entries(modelTestResults).map(([id, r]) => {
+                const icon = r.status === 'pending' ? '…' : r.status === 'ok' ? 'OK' : 'ERR';
+                const ms = typeof r.ms === 'number' ? ` ${r.ms}ms` : '';
+                const text = r.text ? ` ${r.text}` : '';
+                return `${icon}${ms} ${id}${text}\n`;
+              }).join('')}
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -237,6 +482,18 @@ export function Settings() {
             />
             <span style={{ fontSize: '13px', color: colors.textPrimary }}>Показывать ночные действия</span>
           </label>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={settings.revealRolesByDefault}
+              onChange={e => settings.updateSettings({ revealRolesByDefault: e.target.checked })}
+              style={{ accentColor: colors.accent }}
+            />
+            <span style={{ fontSize: '13px', color: colors.textPrimary }}>
+              По умолчанию показывать роли (и истинные цвета)
+            </span>
+          </label>
         </div>
       </div>
 
@@ -290,6 +547,40 @@ export function Settings() {
               Сброс
             </Button>
           </div>
+        </div>
+      </div>
+
+      {/* System prompt / rules */}
+      <div style={sectionStyle}>
+        <h3 style={{ margin: '0 0 16px', color: colors.textPrimary, fontSize: '16px' }}>
+          🧠 Системный промпт
+        </h3>
+
+        <div style={{ marginBottom: '12px' }}>
+          <label style={labelStyle}>Текст правил (rulesText)</label>
+          <textarea
+            value={settings.rulesText}
+            onChange={e => settings.updateSettings({ rulesText: e.target.value })}
+            rows={10}
+            style={{ ...inputStyle, resize: 'vertical', fontSize: '13px', lineHeight: 1.4 }}
+          />
+          <p style={{ fontSize: '11px', color: colors.textMuted, marginTop: '6px' }}>
+            Этот текст подставляется в системный промпт и используется агентами как “правила игры”.
+          </p>
+        </div>
+
+        <div style={{ marginBottom: '12px' }}>
+          <label style={labelStyle}>Шаблон системного промпта (systemPromptTemplate)</label>
+          <textarea
+            value={settings.systemPromptTemplate}
+            onChange={e => settings.updateSettings({ systemPromptTemplate: e.target.value })}
+            rows={12}
+            style={{ ...inputStyle, resize: 'vertical', fontSize: '13px', lineHeight: 1.4 }}
+          />
+          <p style={{ fontSize: '11px', color: colors.textMuted, marginTop: '6px' }}>
+            Плейсхолдеры: <code>{'{character_prompt}'}</code>, <code>{'{rules_text}'}</code>, <code>{'{name}'}</code>, <code>{'{role}'}</code>,{' '}
+            <code>{'{mafia_allies}'}</code>, <code>{'{investigation_results}'}</code>, <code>{'{heal_history}'}</code>.
+          </p>
         </div>
       </div>
 

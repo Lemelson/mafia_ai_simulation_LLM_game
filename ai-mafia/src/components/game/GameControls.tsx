@@ -11,8 +11,10 @@ export function GameControls() {
   const isPaused = useGameStore(s => s.isPaused);
   const speed = useGameStore(s => s.speed);
   const status = useGameStore(s => s.status);
+  const revealRoles = useGameStore(s => s.revealRoles);
   const setPaused = useGameStore(s => s.setPaused);
   const setSpeed = useGameStore(s => s.setSpeed);
+  const setRevealRoles = useGameStore(s => s.setRevealRoles);
   const speechDelay = useSettingsStore(s => s.speechDelay);
   const setSpeechDelay = useSettingsStore(s => s.setSpeechDelay);
   const typingSpeed = useSettingsStore(s => s.typingSpeed);
@@ -108,6 +110,15 @@ export function GameControls() {
         onClick={() => updateSettings({ showNightActions: !showNightActions })}
       >
         {showNightActions ? '🌙 Ночь: видна' : '🌙 Ночь: скрыта'}
+      </Button>
+
+      {/* Reveal roles toggle */}
+      <Button
+        variant={revealRoles ? 'secondary' : 'ghost'}
+        size="sm"
+        onClick={() => setRevealRoles(!revealRoles)}
+      >
+        {revealRoles ? '🎴 Роли: видны' : '🎴 Роли: скрыты'}
       </Button>
 
       <LLMStatusBadge />

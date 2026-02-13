@@ -57,6 +57,7 @@ export interface PlayerInGame {
   name: string;
   avatar: string;
   color: string;
+  publicColor: string; // randomized color when roles are hidden
   role: Role;
   isAlive: boolean;
   systemPrompt: string;

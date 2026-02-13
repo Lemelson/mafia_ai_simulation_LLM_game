@@ -28,10 +28,14 @@ export interface LLMStatusState {
   markMockMissingKey: (modelId: string) => void;
   startLLMCall: (modelId: string) => void;
   markLLMSuccess: (modelId: string) => void;
+  markLLMError: (modelId: string, error: unknown) => void;
   markLLMErrorAndFallback: (modelId: string, error: unknown) => void;
 }
 
-const initial: Omit<LLMStatusState, 'reset' | 'markMockMissingKey' | 'startLLMCall' | 'markLLMSuccess' | 'markLLMErrorAndFallback'> = {
+const initial: Omit<
+  LLMStatusState,
+  'reset' | 'markMockMissingKey' | 'startLLMCall' | 'markLLMSuccess' | 'markLLMError' | 'markLLMErrorAndFallback'
+> = {
   provider: 'openrouter',
   attempts: 0,
   llmCalls: 0,
@@ -102,6 +106,21 @@ export const useLLMStatusStore = create<LLMStatusState>()((set, get) => ({
     }));
   },
 
+  markLLMError: (modelId, error) => {
+    const now = new Date().toISOString();
+    const msg = toErrorString(error).slice(0, 400);
+    const inFlight = get().inFlight;
+    set(state => ({
+      inFlight: Math.max(0, inFlight - 1),
+      llmErrors: state.llmErrors + 1,
+      lastModelId: modelId,
+      lastSource: 'llm',
+      lastFallbackReason: null,
+      lastError: msg,
+      lastErrorAt: now,
+    }));
+  },
+
   markLLMErrorAndFallback: (modelId, error) => {
     const now = new Date().toISOString();
     const msg = toErrorString(error).slice(0, 400);
@@ -119,4 +138,3 @@ export const useLLMStatusStore = create<LLMStatusState>()((set, get) => ({
     }));
   },
 }));
-

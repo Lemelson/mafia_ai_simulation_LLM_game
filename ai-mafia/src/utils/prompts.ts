@@ -1,25 +1,57 @@
 import type { PlayerInGame, GameLogEntry, GameRules } from '../types/game';
 import { ROLE_NAMES } from '../types/game';
 
-export function buildSystemPrompt(player: PlayerInGame, rules: GameRules): string {
-  let prompt = `${player.systemPrompt}\n\n${rules.rulesText}\n\n`;
-  prompt += `Тебя зовут: ${player.name}.\n`;
-  prompt += `Твоя роль: ${ROLE_NAMES[player.role]}.\n`;
+export function buildSystemPrompt(
+  player: PlayerInGame,
+  rules: GameRules,
+  template?: string,
+): string {
+  const fallback = [
+    '{character_prompt}',
+    '',
+    '{rules_text}',
+    '',
+    'Тебя зовут: {name}.',
+    'Твоя роль: {role}.',
+    'Твои союзники (мафия): {mafia_allies}',
+    'Результаты твоих проверок:',
+    '{investigation_results}',
+    'Ты лечил: {heal_history}',
+  ].join('\n');
 
-  if (player.role === 'mafia' && player.privateKnowledge.allies?.length) {
-    prompt += `Твои союзники (мафия): ${player.privateKnowledge.allies.join(', ')}.\n`;
-  }
+  const tpl = (template && template.trim().length > 0) ? template : fallback;
 
-  if (player.role === 'detective' && player.privateKnowledge.investigationResults?.length) {
-    prompt += `Результаты твоих проверок:\n`;
-    for (const r of player.privateKnowledge.investigationResults) {
-      prompt += `- Ночь ${r.night}: ${r.target} — ${r.result === 'mafia' ? 'МАФИЯ' : 'невиновен'}\n`;
-    }
-  }
+  const mafiaAllies = player.role === 'mafia' && player.privateKnowledge.allies?.length
+    ? player.privateKnowledge.allies.join(', ')
+    : '';
 
-  if (player.role === 'doctor' && player.privateKnowledge.healHistory?.length) {
-    prompt += `Ты лечил: ${player.privateKnowledge.healHistory.join(', ')}.\n`;
-  }
+  const investigationResults = player.role === 'detective' && player.privateKnowledge.investigationResults?.length
+    ? player.privateKnowledge.investigationResults
+      .map(r => `- Ночь ${r.night}: ${r.target} — ${r.result === 'mafia' ? 'МАФИЯ' : 'невиновен'}`)
+      .join('\n')
+    : '';
+
+  const healHistory = player.role === 'doctor' && player.privateKnowledge.healHistory?.length
+    ? player.privateKnowledge.healHistory.join(', ')
+    : '';
+
+  // Simple placeholder substitution.
+  let prompt = tpl;
+  prompt = prompt.replaceAll('{character_prompt}', player.systemPrompt || '');
+  prompt = prompt.replaceAll('{rules_text}', rules.rulesText || '');
+  prompt = prompt.replaceAll('{name}', player.name);
+  prompt = prompt.replaceAll('{role}', ROLE_NAMES[player.role]);
+  prompt = prompt.replaceAll('{mafia_allies}', mafiaAllies);
+  prompt = prompt.replaceAll('{investigation_results}', investigationResults);
+  prompt = prompt.replaceAll('{heal_history}', healHistory);
+
+  // Cleanup: avoid huge vertical whitespace when optional blocks are empty.
+  prompt = prompt
+    .split('\n')
+    .map(l => l.trimEnd())
+    .join('\n')
+    .replace(/\n{4,}/g, '\n\n\n')
+    .trim();
 
   return prompt;
 }

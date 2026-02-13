@@ -7,6 +7,8 @@ import type {
 import { DEFAULT_RULES, ROLE_DISTRIBUTION, ROLE_SIDES } from '../types/game';
 import type { Player } from '../types/player';
 import { useNamePoolStore } from './namePoolStore';
+import { useSettingsStore } from './settingsStore';
+import { DEFAULT_COLORS } from '../types/player';
 
 function shuffleArray<T>(array: T[]): T[] {
   const arr = [...array];
@@ -54,6 +56,7 @@ export interface GameStoreState extends GameState {
   // Lobby
   selectedSeats: LobbySeat[];
   customRoles: { mafia: number; detective: number; doctor: number; civilian: number } | null;
+  revealRoles: boolean; // observer UI toggle (roles/models/true colors)
 
   // Pre-generated replies buffer
   replyBuffer: Map<string, string>;
@@ -63,6 +66,7 @@ export interface GameStoreState extends GameState {
   addCharacterToLobby: (characterId: string) => void;
   removeSeatFromLobby: (seatId: string) => void;
   setCustomRoles: (roles: { mafia: number; detective: number; doctor: number; civilian: number } | null) => void;
+  setRevealRoles: (val: boolean) => void;
 
   // Game flow
   startGame: (libraryPlayers: Player[]) => void;
@@ -108,7 +112,7 @@ export interface GameStoreState extends GameState {
   getTodayLog: () => GameLogEntry[];
 }
 
-const initialState: Omit<GameState, 'id'> & { selectedSeats: LobbySeat[]; customRoles: null; replyBuffer: Map<string, string> } = {
+const initialState: Omit<GameState, 'id'> & { selectedSeats: LobbySeat[]; customRoles: null; revealRoles: boolean; replyBuffer: Map<string, string> } = {
   status: 'lobby',
   phase: 'lobby',
   dayNumber: 0,
@@ -128,6 +132,7 @@ const initialState: Omit<GameState, 'id'> & { selectedSeats: LobbySeat[]; custom
   speed: 1,
   selectedSeats: [],
   customRoles: null,
+  revealRoles: false,
   replyBuffer: new Map(),
 };
 
@@ -151,6 +156,7 @@ export const useGameStore = create<GameStoreState>()((set, get) => ({
   },
 
   setCustomRoles: (roles) => set({ customRoles: roles }),
+  setRevealRoles: (val) => set({ revealRoles: val }),
 
   // --- Start Game ---
   startGame: (libraryPlayers) => {
@@ -175,6 +181,7 @@ export const useGameStore = create<GameStoreState>()((set, get) => ({
     // Build players from library, assign roles and seats
     const shuffledSeats = shuffleArray(state.selectedSeats);
     const randomNames = pickUniqueNamesFromPool(useNamePoolStore.getState().names, count);
+    const publicColors = shuffleArray(DEFAULT_COLORS).slice(0, count);
 
     const gamePlayers: PlayerInGame[] = shuffledSeats.map((seat, index) => {
       const libPlayer = libraryPlayers.find(p => p.id === seat.characterId)!;
@@ -186,6 +193,7 @@ export const useGameStore = create<GameStoreState>()((set, get) => ({
         name: randomNames[index],
         avatar: libPlayer.avatar,
         color: libPlayer.color,
+        publicColor: publicColors[index] || '#888888',
         role,
         isAlive: true,
         systemPrompt: libPlayer.systemPrompt,
@@ -221,11 +229,16 @@ export const useGameStore = create<GameStoreState>()((set, get) => ({
       nightActions: null,
       votingState: null,
       winner: null,
+      rules: {
+        ...state.rules,
+        rulesText: useSettingsStore.getState().rulesText || state.rules.rulesText,
+      },
       startedAt: new Date().toISOString(),
       finishedAt: null,
       currentSpeakerIndex: 0,
       currentDiscussionRound: 1,
       speakingOrder,
+      revealRoles: useSettingsStore.getState().revealRolesByDefault,
       isProcessing: false,
       isPaused: false,
       replyBuffer: new Map(),

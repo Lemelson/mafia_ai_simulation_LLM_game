@@ -14,17 +14,25 @@ interface ChatMessageProps {
 export function ChatMessage({ entry }: ChatMessageProps) {
   const { colors, theme } = useTheme();
   const typingSpeed = useSettingsStore(s => s.typingSpeed);
-  const role = useGameStore(s => {
+  const revealRoles = useGameStore(s => s.revealRoles);
+  const player = useGameStore(s => {
     if (!entry.playerId) return null;
-    const p = s.players.find(pp => pp.playerId === entry.playerId);
-    return p ? p.role : null;
+    return s.players.find(pp => pp.playerId === entry.playerId) || null;
   });
   const lastEntryId = useGameStore(s => s.log[s.log.length - 1]?.id);
 
   const isNightChat = entry.type === 'night_chat';
   const isVote = entry.type === 'vote';
 
-  const roleLabel = role ? `${ROLE_EMOJI[role]} ${ROLE_NAMES[role]}` : null;
+  const displayColor = player ? (revealRoles ? player.color : player.publicColor) : (entry.playerColor || colors.accent);
+  const avatarEmoji =
+    player?.avatar ||
+    (isVote ? '🗳️' : isNightChat ? '🌙' : '💬');
+
+  const roleLabel =
+    revealRoles && player?.role
+      ? `${ROLE_EMOJI[player.role]} ${ROLE_NAMES[player.role]}`
+      : null;
 
   const shouldTypewrite = useMemo(() => {
     if (typingSpeed >= 8) return false; // effectively instant
@@ -60,9 +68,9 @@ export function ChatMessage({ entry }: ChatMessageProps) {
         padding: '10px 12px',
         borderRadius: theme.borderRadius,
         background: isNightChat
-          ? withOpacity(entry.playerColor || colors.accent, 0.08)
+          ? withOpacity(displayColor, 0.08)
           : colors.chatMessageBg,
-        border: `1px solid ${isNightChat ? withOpacity(entry.playerColor || colors.accent, 0.15) : colors.border}`,
+        border: `1px solid ${isNightChat ? withOpacity(displayColor, 0.15) : colors.border}`,
         opacity: isNightChat ? 0.85 : 1,
       }}
     >
@@ -72,16 +80,41 @@ export function ChatMessage({ entry }: ChatMessageProps) {
           width: 32,
           height: 32,
           borderRadius: '50%',
-          background: withOpacity(entry.playerColor || colors.accent, 0.2),
-          border: `2px solid ${entry.playerColor || colors.accent}`,
+          background: withOpacity(displayColor, 0.2),
+          border: `2px solid ${displayColor}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: '14px',
           flexShrink: 0,
+          position: 'relative',
         }}
       >
-        {isVote ? '🗳️' : isNightChat ? '🌙' : '💬'}
+        {avatarEmoji}
+
+        {(isVote || isNightChat) && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: -4,
+              right: -4,
+              width: 16,
+              height: 16,
+              borderRadius: 999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 10,
+              background: colors.bgPrimary,
+              border: `1px solid ${colors.border}`,
+              boxShadow: colors.shadow,
+              opacity: 0.9,
+            }}
+            title={isVote ? 'Голосование' : 'Ночной чат'}
+          >
+            {isVote ? '🗳️' : '🌙'}
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -90,11 +123,11 @@ export function ChatMessage({ entry }: ChatMessageProps) {
           <span style={{
             fontSize: '13px',
             fontWeight: 700,
-            color: entry.playerColor || colors.textPrimary,
+            color: displayColor || colors.textPrimary,
           }}>
-            {entry.playerName}{role ? ` (${ROLE_NAMES[role]})` : ''}
+            {entry.playerName}
           </span>
-          {roleLabel && <span style={{ fontSize: '10px', color: colors.textMuted }}>{ROLE_EMOJI[role!]}</span>}
+          {roleLabel && <span style={{ fontSize: '10px', color: colors.textMuted }}>{roleLabel}</span>}
           {isNightChat && (
             <span style={{ fontSize: '10px', color: colors.textMuted }}>
               🌙 ночь

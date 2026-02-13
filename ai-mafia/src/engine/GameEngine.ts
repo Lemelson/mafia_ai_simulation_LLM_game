@@ -69,6 +69,7 @@ class GameEngine {
   ): Promise<string> {
     // Update API key from settings
     this.llm.setApiKey(this.settings.openRouterApiKey);
+    this.llm.setBaseUrl(this.settings.openRouterBaseUrl);
 
     if (!this.llm.isAvailable()) {
       // Fallback: generate mock reply
@@ -76,7 +77,11 @@ class GameEngine {
       return this.mockReply(player, format);
     }
 
-    const systemPrompt = buildSystemPrompt(player, this.store.rules);
+    const systemPrompt = buildSystemPrompt(
+      player,
+      this.store.rules,
+      this.settings.systemPromptTemplate,
+    );
 
     try {
       useLLMStatusStore.getState().startLLMCall(player.modelId);
@@ -92,6 +97,33 @@ class GameEngine {
       return reply;
     } catch (error) {
       console.error(`LLM error for ${player.name}:`, error);
+
+      // If a specific model has no endpoints (404) or fails, try the app's default model once
+      // before falling back to mock replies.
+      const fallbackModel = (this.settings.defaultModel ?? '').trim() || 'openrouter/free';
+      const canRetry = fallbackModel.length > 0 && fallbackModel !== player.modelId;
+
+      if (canRetry) {
+        useLLMStatusStore.getState().markLLMError(player.modelId, error);
+        try {
+          useLLMStatusStore.getState().startLLMCall(fallbackModel);
+          const reply = await this.llm.generateReply({
+            systemPrompt,
+            messages: [{ role: 'user', content: userMessage }],
+            modelId: fallbackModel,
+            maxTokens: this.settings.maxTokensPerReply,
+            temperature: this.settings.temperature,
+            responseFormat: format,
+          });
+          useLLMStatusStore.getState().markLLMSuccess(fallbackModel);
+          return reply;
+        } catch (error2) {
+          console.error(`LLM fallback error for ${player.name}:`, error2);
+          useLLMStatusStore.getState().markLLMErrorAndFallback(fallbackModel, error2);
+          return this.mockReply(player, format);
+        }
+      }
+
       useLLMStatusStore.getState().markLLMErrorAndFallback(player.modelId, error);
       return this.mockReply(player, format);
     }
@@ -174,17 +206,19 @@ class GameEngine {
       content: '🎴 Роли распределены! Игра начинается...',
     });
 
-    // Observer-friendly: reveal all roles in the chat log.
-    const roleList = this.store.players
-      .map(p => `- ${p.name} — ${ROLE_NAMES[p.role]}`)
-      .join('\n');
+    // Optional observer reveal (UI toggle).
+    if (useGameStore.getState().revealRoles) {
+      const roleList = this.store.players
+        .map(p => `- ${p.name} — ${ROLE_NAMES[p.role]}`)
+        .join('\n');
 
-    this.addLog({
-      type: 'system',
-      phase: 'role_assignment',
-      dayNumber: 0,
-      content: `🧾 Роли за столом:\n${roleList}`,
-    });
+      this.addLog({
+        type: 'system',
+        phase: 'role_assignment',
+        dayNumber: 0,
+        content: `🧾 Роли за столом:\n${roleList}`,
+      });
+    }
 
     await delay(2000 / this.store.speed);
     useGameStore.getState().setProcessing(false);
@@ -476,7 +510,10 @@ class GameEngine {
     if (na?.killed) {
       const killedPlayer = this.store.getPlayerById(na.killed);
       if (killedPlayer) {
-        const roleName = this.store.rules.revealRoleOnDeath ? ` — ${ROLE_NAMES[killedPlayer.role]}` : '';
+        const roleName =
+          (useGameStore.getState().revealRoles && this.store.rules.revealRoleOnDeath)
+            ? ` — ${ROLE_NAMES[killedPlayer.role]}`
+            : '';
         announcement = `☀️ Город просыпается. День ${newDay}. Этой ночью был убит ${killedPlayer.name}${roleName}. 💀`;
       } else {
         announcement = `☀️ Город просыпается. День ${newDay}. Этой ночью никто не пострадал.`;
@@ -689,7 +726,10 @@ class GameEngine {
     if (eliminated) {
       const player = this.store.getPlayerById(eliminated);
       if (player) {
-        const roleName = this.store.rules.revealRoleOnDeath ? ` — ${ROLE_NAMES[player.role]}` : '';
+        const roleName =
+          (useGameStore.getState().revealRoles && this.store.rules.revealRoleOnDeath)
+            ? ` — ${ROLE_NAMES[player.role]}`
+            : '';
 
         this.addLog({
           type: 'death',
