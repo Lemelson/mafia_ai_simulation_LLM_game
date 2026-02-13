@@ -1,0 +1,23 @@
+# Root ignores for the whole repo
+
+# macOS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Local agent settings
+.claude/settings.local.json
+
+# Node / Vite build artifacts
+ai-mafia/node_modules/
+ai-mafia/dist/
+ai-mafia/dist-ssr/
+ai-mafia/.vite/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
