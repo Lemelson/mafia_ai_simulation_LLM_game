@@ -63,11 +63,40 @@ export class OpenRouterService implements LLMService {
 
     const data = await response.json();
 
-    if (!data.choices || !data.choices[0]?.message?.content) {
-      throw new Error('Invalid response from OpenRouter API');
+    const choice = data.choices?.[0];
+    const msg = choice?.message;
+    const content = msg?.content;
+
+    // OpenRouter typically returns a string content. Some providers may return an empty string
+    // while still providing "reasoning" (i.e. the model never produced a final answer).
+    if (typeof content === 'string') {
+      if (content.trim().length > 0) return content;
+      const finish = choice?.finish_reason || choice?.native_finish_reason || 'unknown';
+      const hasReasoning = typeof msg?.reasoning === 'string' && msg.reasoning.trim().length > 0;
+      if (hasReasoning) {
+        throw new Error(`OpenRouter returned empty content (finish_reason=${finish}). Try increasing max tokens or using a non-reasoning model.`);
+      }
+      throw new Error(`OpenRouter returned empty content (finish_reason=${finish}).`);
     }
 
-    return data.choices[0].message.content;
+    // Some providers may represent content as a structured array.
+    if (Array.isArray(content)) {
+      const parts = content
+        .map((p: unknown) => {
+          if (!p) return '';
+          if (typeof p === 'string') return p;
+          if (typeof p === 'object') {
+            const obj = p as Record<string, unknown>;
+            if (typeof obj.text === 'string') return obj.text;
+            if (typeof obj.content === 'string') return obj.content;
+          }
+          return '';
+        })
+        .join('');
+      if (parts.trim().length > 0) return parts;
+    }
+
+    throw new Error('Invalid response from OpenRouter API (no message content)');
   }
 }
 

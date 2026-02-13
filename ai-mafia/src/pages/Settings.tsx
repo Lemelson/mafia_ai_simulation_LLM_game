@@ -27,6 +27,9 @@ export function Settings() {
   const [freeModelsText, setFreeModelsText] = React.useState('');
   const freeModelIds = useSettingsStore(s => s.freeModelIds);
   const setFreeModelIds = useSettingsStore(s => s.setFreeModelIds);
+  const hiddenModelIds = useSettingsStore(s => s.hiddenModelIds);
+  const hideModelIds = useSettingsStore(s => s.hideModelIds);
+  const clearHiddenModelIds = useSettingsStore(s => s.clearHiddenModelIds);
   const [modelTestResults, setModelTestResults] = React.useState<Record<string, { status: 'pending' | 'ok' | 'error'; ms?: number; text?: string }>>({});
   const [isBatchTesting, setIsBatchTesting] = React.useState(false);
   const batchCancelRef = React.useRef({ cancelled: false });
@@ -71,12 +74,12 @@ export function Settings() {
     for (const modelId of toTest) {
       if (batchCancelRef.current.cancelled) break;
       const t0 = performance.now();
-      try {
-        const reply = await svc.generateReply({
-          systemPrompt: 'Reply with exactly: OK',
-          messages: [{ role: 'user', content: 'Привет! Ответь одним словом: OK' }],
+        try {
+          const reply = await svc.generateReply({
+          systemPrompt: 'Output only: OK',
+          messages: [{ role: 'user', content: 'Ответь строго одним словом: OK' }],
           modelId,
-          maxTokens: 16,
+          maxTokens: 96,
           temperature: 0,
           responseFormat: 'text',
         });
@@ -315,14 +318,14 @@ export function Settings() {
             onChange={e => settings.updateSettings({ defaultModel: e.target.value })}
             style={inputStyle}
           >
-            {DEFAULT_MODELS.map(m => (
+            {DEFAULT_MODELS.filter(m => !hiddenModelIds.includes(m.id)).map(m => (
               <option key={m.id} value={m.id}>
                 {m.name} ({m.provider}) {m.free ? '🆓' : '💰'}
               </option>
             ))}
             {freeModelIds.length > 0 && (
               <optgroup label="Imported free models">
-                {freeModelIds.map(id => (
+                {freeModelIds.filter(id => !hiddenModelIds.includes(id)).map(id => (
                   <option key={id} value={id}>
                     {id}
                   </option>
@@ -330,6 +333,17 @@ export function Settings() {
               </optgroup>
             )}
           </select>
+          {hiddenModelIds.length > 0 && (
+            <div style={{ fontSize: '12px', color: colors.textMuted, marginTop: '6px' }}>
+              Скрыто моделей: {hiddenModelIds.length}{' '}
+              <button
+                onClick={() => clearHiddenModelIds()}
+                style={{ background: 'transparent', border: 'none', color: colors.accent, cursor: 'pointer', padding: 0, fontFamily: theme.fontFamily }}
+              >
+                (показать все)
+              </button>
+            </div>
+          )}
         </div>
 
         <div style={{ marginBottom: '12px' }}>
@@ -428,6 +442,33 @@ export function Settings() {
                 const text = r.text ? ` ${r.text}` : '';
                 return `${icon}${ms} ${id}${text}\n`;
               }).join('')}
+            </div>
+          )}
+
+          {Object.keys(modelTestResults).length > 0 && (
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px', flexWrap: 'wrap' }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const bad = Object.entries(modelTestResults)
+                    .filter(([id, r]) => id !== '(setup)' && r.status === 'error')
+                    .map(([id]) => id);
+                  if (bad.length === 0) return;
+                  hideModelIds(bad);
+                  setFreeModelIds(freeModelIds.filter(id => !bad.includes(id)));
+                }}
+                title="Скрывает модели с ERR из выпадающих списков и убирает их из импортированного списка"
+              >
+                🙈 Скрыть ERR
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setModelTestResults({}); }}
+              >
+                Очистить результаты
+              </Button>
             </div>
           )}
         </div>

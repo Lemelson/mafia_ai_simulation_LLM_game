@@ -16,6 +16,7 @@ export interface SettingsState {
   rulesText: string; // editable rules passed into system prompt
   systemPromptTemplate: string; // template used to build the LLM system prompt
   freeModelIds: string[]; // optional imported list (e.g., from OpenRouter/Puter docs)
+  hiddenModelIds: string[]; // locally hidden models in dropdowns
   ttsProvider: string | null;
   ttsApiKey: string | null;
   ttsEnabled: boolean;
@@ -26,6 +27,8 @@ export interface SettingsState {
   setSpeechDelay: (ms: number) => void;
   setTypingSpeed: (speed: number) => void;
   setFreeModelIds: (ids: string[]) => void;
+  hideModelIds: (ids: string[]) => void;
+  clearHiddenModelIds: () => void;
   updateSettings: (partial: Partial<SettingsState>) => void;
 }
 
@@ -89,6 +92,7 @@ export const useSettingsStore = create<SettingsState>()(
 - В обсуждении отвечай только репликой от первого лица.
 - Если тебя просят голосовать или выбрать цель, отвечай строго JSON (как указано в сообщении пользователя), без текста вокруг.`,
       freeModelIds: [],
+      hiddenModelIds: [],
       ttsProvider: null,
       ttsApiKey: null,
       ttsEnabled: false,
@@ -98,6 +102,8 @@ export const useSettingsStore = create<SettingsState>()(
       setSpeechDelay: (ms) => set({ speechDelay: ms }),
       setTypingSpeed: (speed) => set({ typingSpeed: speed }),
       setFreeModelIds: (ids) => set({ freeModelIds: ids }),
+      hideModelIds: (ids) => set(state => ({ hiddenModelIds: Array.from(new Set([...(state.hiddenModelIds ?? []), ...(ids ?? [])])) })),
+      clearHiddenModelIds: () => set({ hiddenModelIds: [] }),
       updateSettings: (partial) => set(partial),
     }),
     {
