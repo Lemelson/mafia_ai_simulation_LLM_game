@@ -25,28 +25,16 @@ export const DEFAULT_COLORS = [
 ];
 
 export const DEFAULT_MODELS = [
+  // Keep the built-in list small and free-only. Add more models via Settings after verification.
   { id: 'openrouter/free', name: 'Free Router', provider: 'OpenRouter', free: true },
   { id: 'arcee-ai/trinity-large-preview:free', name: 'Trinity Large Preview', provider: 'Arcee AI', free: true },
   { id: 'openai/gpt-oss-120b:free', name: 'gpt-oss-120b', provider: 'OpenAI', free: true },
   { id: 'stepfun/step-3.5-flash:free', name: 'Step 3.5 Flash', provider: 'StepFun', free: true },
-  { id: 'tngtech/deepseek-r1t2-chimera:free', name: 'DeepSeek R1T2 Chimera', provider: 'TNG Tech', free: true },
-  { id: 'tngtech/deepseek-r1t-chimera:free', name: 'DeepSeek R1T Chimera', provider: 'TNG Tech', free: true },
-  { id: 'tngtech/tng-r1t-chimera:free', name: 'TNG R1T Chimera', provider: 'TNG Tech', free: true },
   { id: 'z-ai/glm-4.5-air:free', name: 'GLM 4.5 Air', provider: 'Z.ai', free: true },
   { id: 'nvidia/nemotron-3-nano-30b-a3b:free', name: 'Nemotron 3 Nano 30B A3B', provider: 'NVIDIA', free: true },
-  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', provider: 'Google', free: false },
-  { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'Google', free: false },
-  // NOTE: Some provider/model IDs change or temporarily lose endpoints on OpenRouter.
-  // Prefer using `openrouter/free` if you want a stable "free" default.
-  { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1', provider: 'DeepSeek', free: true },
   { id: 'deepseek/deepseek-r1-0528:free', name: 'DeepSeek R1 0528', provider: 'DeepSeek', free: true },
   { id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B', provider: 'Meta', free: true },
-  { id: 'qwen/qwen3-coder:free', name: 'Qwen3 Coder 480B', provider: 'Qwen', free: true },
-  { id: 'qwen/qwen3-235b-a22b:free', name: 'Qwen3 235B', provider: 'Qwen', free: true },
-  { id: 'mistralai/mistral-small-3.1-24b-instruct:free', name: 'Mistral Small 3.1', provider: 'Mistral', free: true },
   { id: 'google/gemma-3-27b-it:free', name: 'Gemma 3 27B', provider: 'Google', free: true },
-  { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'Anthropic', free: false },
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', free: false },
 ];
 
 // Pre-built characters for the library
@@ -86,7 +74,7 @@ export const DEFAULT_PLAYERS: Omit<Player, 'id' | 'createdAt'>[] = [
     avatar: '😎',
     color: '#45B7D1',
     systemPrompt: 'Ты агрессивный и напористый. Ты первым обвиняешь, давишь на других, требуешь ответов. Если кто-то обвиняет тебя — яростно защищаешься и переводишь стрелки.',
-    modelId: 'qwen/qwen3-235b-a22b:free',
+    modelId: 'openai/gpt-oss-120b:free',
     ttsVoiceId: null,
     ttsEnabled: false,
     elo: 1000,
@@ -96,7 +84,7 @@ export const DEFAULT_PLAYERS: Omit<Player, 'id' | 'createdAt'>[] = [
     avatar: '👩‍⚕️',
     color: '#96CEB4',
     systemPrompt: 'Ты добродушная и наивная. Ты легко веришь другим и часто соглашаешься с большинством. Иногда случайно говоришь подозрительные вещи, даже если невиновна. Говоришь просто, короткими фразами.',
-    modelId: 'mistralai/mistral-small-3.1-24b-instruct:free',
+    modelId: 'openrouter/free',
     ttsVoiceId: null,
     ttsEnabled: false,
     elo: 1000,
@@ -126,7 +114,7 @@ export const DEFAULT_PLAYERS: Omit<Player, 'id' | 'createdAt'>[] = [
     avatar: '🐺',
     color: '#BB8FCE',
     systemPrompt: 'Ты харизматичный лидер. Любишь брать инициативу, организовывать голосования, предлагать стратегии. Говоришь уверенно, как будто знаешь правду. Иногда слишком самоуверен.',
-    modelId: 'qwen/qwen3-235b-a22b:free',
+    modelId: 'openrouter/free',
     ttsVoiceId: null,
     ttsEnabled: false,
     elo: 1000,
@@ -146,7 +134,7 @@ export const DEFAULT_PLAYERS: Omit<Player, 'id' | 'createdAt'>[] = [
     avatar: '🧙',
     color: '#82E0AA',
     systemPrompt: 'Ты философ и мыслитель. Ты рассуждаешь абстрактно, используешь метафоры и аналогии. Иногда отвлекаешься от темы, но в итоге приходишь к интересным выводам.',
-    modelId: 'mistralai/mistral-small-3.1-24b-instruct:free',
+    modelId: 'openrouter/free',
     ttsVoiceId: null,
     ttsEnabled: false,
     elo: 1000,

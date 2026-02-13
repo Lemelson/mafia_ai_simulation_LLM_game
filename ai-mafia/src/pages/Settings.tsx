@@ -203,7 +203,7 @@ export function Settings() {
               setDiskKeyStatus({ kind: 'loading', text: 'Сохраняю в .local...' });
               try {
                 const ok = await localSecretsHealth();
-                if (!ok) throw new Error('Локальный secrets-сервер не запущен. Запусти `npm run dev:local`.');
+                if (!ok) throw new Error('Локальное сохранение недоступно (нужен dev-сервер: `npm run dev`).');
                 await saveLocalSecrets({
                   openRouterApiKey: settings.openRouterApiKey,
                   openRouterBaseUrl: settings.openRouterBaseUrl,
@@ -224,7 +224,7 @@ export function Settings() {
               setDiskKeyStatus({ kind: 'loading', text: 'Загружаю из .local...' });
               try {
                 const ok = await localSecretsHealth();
-                if (!ok) throw new Error('Локальный secrets-сервер не запущен. Запусти `npm run dev:local`.');
+                if (!ok) throw new Error('Локальное сохранение недоступно (нужен dev-сервер: `npm run dev`).');
                 const s = await loadLocalSecrets();
                 if (s.openRouterApiKey) {
                   settings.setApiKey(s.openRouterApiKey);
@@ -247,7 +247,7 @@ export function Settings() {
               setDiskKeyStatus({ kind: 'loading', text: 'Удаляю из .local...' });
               try {
                 const ok = await localSecretsHealth();
-                if (!ok) throw new Error('Локальный secrets-сервер не запущен. Запусти `npm run dev:local`.');
+                if (!ok) throw new Error('Локальное сохранение недоступно (нужен dev-сервер: `npm run dev`).');
                 await deleteLocalSecrets();
                 setDiskKeyStatus({ kind: 'ok', text: 'Удалено из ai-mafia/.local/secrets.json' });
               } catch (e) {
@@ -330,6 +330,19 @@ export function Settings() {
             onChange={e => settings.updateSettings({ defaultModel: e.target.value })}
             style={inputStyle}
           >
+            {(() => {
+              const visible = new Set<string>([
+                ...DEFAULT_MODELS.filter(m => !hiddenModelIds.includes(m.id)).map(m => m.id),
+                ...freeModelIds.filter(id => !hiddenModelIds.includes(id)),
+              ])
+              return !visible.has(settings.defaultModel)
+                ? (
+                  <option key={settings.defaultModel} value={settings.defaultModel}>
+                    {settings.defaultModel} (hidden/unknown)
+                  </option>
+                )
+                : null
+            })()}
             {DEFAULT_MODELS.filter(m => !hiddenModelIds.includes(m.id)).map(m => (
               <option key={m.id} value={m.id}>
                 {m.name} ({m.provider}) {m.free ? '🆓' : '💰'}

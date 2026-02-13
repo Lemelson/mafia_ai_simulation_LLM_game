@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../components/themes/ThemeProvider';
 import { usePlayerStore } from '../stores/playerStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Badge } from '../components/ui/Badge';
@@ -18,6 +19,9 @@ export function PlayerLibrary() {
   const updatePlayer = usePlayerStore(s => s.updatePlayer);
   const deletePlayer = usePlayerStore(s => s.deletePlayer);
   const initializeDefaults = usePlayerStore(s => s.initializeDefaults);
+  const defaultModelId = useSettingsStore(s => s.defaultModel);
+  const hiddenModelIds = useSettingsStore(s => s.hiddenModelIds);
+  const customModelIds = useSettingsStore(s => s.freeModelIds);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
@@ -27,7 +31,24 @@ export function PlayerLibrary() {
   const [avatar, setAvatar] = useState('🎭');
   const [color, setColor] = useState('#FF6B6B');
   const [systemPrompt, setSystemPrompt] = useState('');
-  const [modelId, setModelId] = useState('deepseek/deepseek-chat-v3.1:free');
+  const [modelId, setModelId] = useState(defaultModelId);
+
+  const modelOptions = React.useMemo(() => {
+    const base = DEFAULT_MODELS.filter(m => !hiddenModelIds.includes(m.id));
+    const custom = (customModelIds ?? [])
+      .map(id => id.trim())
+      .filter(Boolean)
+      .filter(id => !hiddenModelIds.includes(id))
+      .filter(id => !base.some(m => m.id === id))
+      .map(id => ({ id, name: id, provider: 'Custom', free: true as const }));
+    return [...base, ...custom];
+  }, [customModelIds, hiddenModelIds]);
+
+  const modelNameById = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of modelOptions) map.set(m.id, m.name);
+    return map;
+  }, [modelOptions]);
 
   useEffect(() => {
     initializeDefaults();
@@ -47,7 +68,7 @@ export function PlayerLibrary() {
       setAvatar(DEFAULT_AVATARS[Math.floor(Math.random() * DEFAULT_AVATARS.length)]);
       setColor(DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)]);
       setSystemPrompt('');
-      setModelId('deepseek/deepseek-chat-v3.1:free');
+      setModelId(defaultModelId);
     }
     setIsEditing(true);
   };
@@ -148,7 +169,7 @@ export function PlayerLibrary() {
                     {player.name}
                   </div>
                   <Badge>
-                    {DEFAULT_MODELS.find(m => m.id === player.modelId)?.name || player.modelId}
+                    {modelNameById.get(player.modelId) || player.modelId}
                   </Badge>
                   <div style={{
                     marginTop: '4px',
@@ -276,9 +297,14 @@ export function PlayerLibrary() {
               onChange={e => setModelId(e.target.value)}
               style={inputStyle}
             >
-              {DEFAULT_MODELS.map(m => (
+              {!modelOptions.some(m => m.id === modelId) && (
+                <option value={modelId}>
+                  {modelId} (unknown)
+                </option>
+              )}
+              {modelOptions.map(m => (
                 <option key={m.id} value={m.id}>
-                  {m.name} ({m.provider}) {m.free ? '🆓' : '💰'}
+                  {m.name} ({m.provider}) 🆓
                 </option>
               ))}
             </select>
