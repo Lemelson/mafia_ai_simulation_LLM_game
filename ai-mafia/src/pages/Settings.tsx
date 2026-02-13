@@ -9,6 +9,7 @@ import { DEFAULT_MODELS } from '../types/player';
 import { resetOpenRouterService } from '../services/llm/OpenRouterService';
 import { OpenRouterService } from '../services/llm/OpenRouterService';
 import { filterFreeModels, parseOpenRouterModelIdsFromText } from '../utils/modelList';
+import { deleteLocalSecrets, loadLocalSecrets, localSecretsHealth, saveLocalSecrets } from '../services/localSecrets';
 
 export function Settings() {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export function Settings() {
   const resetNames = useNamePoolStore(s => s.resetDefaults);
   const [newName, setNewName] = React.useState('');
   const [llmTestStatus, setLlmTestStatus] = React.useState<{ kind: 'idle' | 'loading' | 'ok' | 'error'; text?: string }>({ kind: 'idle' });
+  const [diskKeyStatus, setDiskKeyStatus] = React.useState<{ kind: 'idle' | 'loading' | 'ok' | 'error'; text?: string }>({ kind: 'idle' });
   const [freeModelsText, setFreeModelsText] = React.useState('');
   const freeModelIds = useSettingsStore(s => s.freeModelIds);
   const setFreeModelIds = useSettingsStore(s => s.setFreeModelIds);
@@ -176,6 +178,86 @@ export function Settings() {
             </a>
             . Ключ хранится локально в вашем браузере.
           </p>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={async () => {
+              setDiskKeyStatus({ kind: 'loading', text: 'Сохраняю в .local...' });
+              try {
+                const ok = await localSecretsHealth();
+                if (!ok) throw new Error('Локальный secrets-сервер не запущен. Запусти `npm run dev:local`.');
+                await saveLocalSecrets({
+                  openRouterApiKey: settings.openRouterApiKey,
+                  openRouterBaseUrl: settings.openRouterBaseUrl,
+                });
+                setDiskKeyStatus({ kind: 'ok', text: 'Сохранено в ai-mafia/.local/secrets.json' });
+              } catch (e) {
+                setDiskKeyStatus({ kind: 'error', text: (e instanceof Error ? e.message : String(e)).slice(0, 220) });
+              }
+            }}
+          >
+            💾 Сохранить ключ в файл
+          </Button>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={async () => {
+              setDiskKeyStatus({ kind: 'loading', text: 'Загружаю из .local...' });
+              try {
+                const ok = await localSecretsHealth();
+                if (!ok) throw new Error('Локальный secrets-сервер не запущен. Запусти `npm run dev:local`.');
+                const s = await loadLocalSecrets();
+                if (s.openRouterApiKey) {
+                  settings.setApiKey(s.openRouterApiKey);
+                  resetOpenRouterService();
+                }
+                if (s.openRouterBaseUrl) settings.updateSettings({ openRouterBaseUrl: s.openRouterBaseUrl });
+                setDiskKeyStatus({ kind: 'ok', text: `Загружено (${s.openRouterApiKeyMasked || 'ключ'})` });
+              } catch (e) {
+                setDiskKeyStatus({ kind: 'error', text: (e instanceof Error ? e.message : String(e)).slice(0, 220) });
+              }
+            }}
+          >
+            📥 Загрузить из файла
+          </Button>
+
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={async () => {
+              setDiskKeyStatus({ kind: 'loading', text: 'Удаляю из .local...' });
+              try {
+                const ok = await localSecretsHealth();
+                if (!ok) throw new Error('Локальный secrets-сервер не запущен. Запусти `npm run dev:local`.');
+                await deleteLocalSecrets();
+                setDiskKeyStatus({ kind: 'ok', text: 'Удалено из ai-mafia/.local/secrets.json' });
+              } catch (e) {
+                setDiskKeyStatus({ kind: 'error', text: (e instanceof Error ? e.message : String(e)).slice(0, 220) });
+              }
+            }}
+          >
+            🗑️ Удалить из файла
+          </Button>
+
+          {diskKeyStatus.kind !== 'idle' && (
+            <span
+              style={{
+                fontSize: '12px',
+                color: diskKeyStatus.kind === 'ok' ? colors.success : diskKeyStatus.kind === 'error' ? colors.danger : colors.textMuted,
+                maxWidth: '520px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={diskKeyStatus.text}
+            >
+              {diskKeyStatus.kind === 'loading' ? '...' : diskKeyStatus.text}
+            </span>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>

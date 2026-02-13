@@ -7,11 +7,13 @@ import { GameScreen } from '../pages/GameScreen';
 import { GameOver } from '../pages/GameOver';
 import { Statistics } from '../pages/Statistics';
 import { Settings } from '../pages/Settings';
+import { LocalSecretsBootstrap } from './LocalSecretsBootstrap';
 
 export function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
+        <LocalSecretsBootstrap />
         <Routes>
           <Route path="/" element={<MainMenu />} />
           <Route path="/players" element={<PlayerLibrary />} />
