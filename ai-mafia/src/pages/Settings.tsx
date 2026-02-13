@@ -46,7 +46,10 @@ export function Settings() {
     'tngtech/tng-r1t-chimera:free',
   ]), []);
 
-  const runBatchModelTest = React.useCallback(async (models: string[]) => {
+  const runBatchModelTest = React.useCallback(async (
+    models: string[],
+    opts?: { hideErrorsAfter?: boolean; pruneImportedAfter?: boolean },
+  ) => {
     const key = (settings.openRouterApiKey ?? '').trim();
     if (!key) {
       setModelTestResults({ '(setup)': { status: 'error', text: 'API ключ пустой (введите OpenRouter ключ выше).' } });
@@ -60,6 +63,7 @@ export function Settings() {
     const uniqueModels = Array.from(new Set(models.map(m => (m ?? '').trim()).filter(Boolean)));
     const maxModels = 25;
     const toTest = uniqueModels.length > maxModels ? uniqueModels.slice(0, maxModels) : uniqueModels;
+    const badIds: string[] = [];
 
     const initial: Record<string, { status: 'pending' | 'ok' | 'error'; ms?: number; text?: string }> = {};
     if (uniqueModels.length > maxModels) {
@@ -74,12 +78,12 @@ export function Settings() {
     for (const modelId of toTest) {
       if (batchCancelRef.current.cancelled) break;
       const t0 = performance.now();
-        try {
-          const reply = await svc.generateReply({
+      try {
+        const reply = await svc.generateReply({
           systemPrompt: 'Output only: OK',
           messages: [{ role: 'user', content: 'Ответь строго одним словом: OK' }],
           modelId,
-          maxTokens: 96,
+          maxTokens: 256,
           temperature: 0,
           responseFormat: 'text',
         });
@@ -91,6 +95,7 @@ export function Settings() {
       } catch (err) {
         const ms = Math.round(performance.now() - t0);
         const msg = err instanceof Error ? err.message : String(err);
+        badIds.push(modelId);
         setModelTestResults(prev => ({
           ...prev,
           [modelId]: { status: 'error', ms, text: msg.slice(0, 180) },
@@ -102,7 +107,14 @@ export function Settings() {
     }
 
     setIsBatchTesting(false);
-  }, [settings.openRouterApiKey, settings.openRouterBaseUrl]);
+
+    if (opts?.hideErrorsAfter && badIds.length > 0) {
+      hideModelIds(badIds);
+    }
+    if (opts?.pruneImportedAfter && badIds.length > 0) {
+      setFreeModelIds(useSettingsStore.getState().freeModelIds.filter(id => !badIds.includes(id)));
+    }
+  }, [settings.openRouterApiKey, settings.openRouterBaseUrl, hideModelIds, setFreeModelIds]);
 
   const allFreeModelsInApp = React.useMemo(() => {
     const ids = new Set<string>();
@@ -400,6 +412,15 @@ export function Settings() {
               title="Проверяет все free-модели, которые сейчас есть в списке приложения (плюс импортированные)"
             >
               ▶︎ Тест free (все из списка)
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={isBatchTesting}
+              onClick={() => { void runBatchModelTest(allFreeModelsInApp, { hideErrorsAfter: true, pruneImportedAfter: true }); }}
+              title="Проверяет и сразу скрывает модели с ERR из выпадающих списков (и удаляет их из импортированного списка)"
+            >
+              ▶︎ Тест free + скрыть ERR
             </Button>
             <Button
               variant="ghost"
